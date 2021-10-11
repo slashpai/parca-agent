@@ -50,9 +50,8 @@ var bpfObj []byte
 var seps = []byte{'\xff'}
 
 const (
-	stackDepth        = 127 // Always needs to be sync with MAX_STACK_DEPTH in parca-agent.bpf.c
-	doubleStackDepth  = 254
-	profilingDuration = time.Second * 10
+	stackDepth       = 127 // Always needs to be sync with MAX_STACK_DEPTH in parca-agent.bpf.c
+	doubleStackDepth = 254
 )
 
 type Record struct {
@@ -75,13 +74,28 @@ func (c *NoopProfileStoreClient) WriteRaw(ctx context.Context, in *profilestorep
 	return &profilestorepb.WriteRawResponse{}, nil
 }
 
+func parseProfilingDuration(profilingDuration string) (time.Duration, error) {
+	if profilingDuration == "" {
+		return time.Second * 10, nil
+	}
+
+	duration, err := time.ParseDuration(profilingDuration)
+
+	if err != nil {
+		return 0, fmt.Errorf("invalid profiling duration: %w", err)
+	}
+
+	return duration, nil
+}
+
 type CgroupProfiler struct {
-	logger         log.Logger
-	externalLabels map[string]string
-	ksymCache      *ksym.KsymCache
-	target         CgroupProfilingTarget
-	sink           func(Record)
-	cancel         func()
+	logger            log.Logger
+	externalLabels    map[string]string
+	ksymCache         *ksym.KsymCache
+	target            CgroupProfilingTarget
+	profilingDuration time.Duration
+	sink              func(Record)
+	cancel            func()
 
 	pidMappingFileCache *maps.PidMappingFileCache
 	writeClient         profilestorepb.ProfileStoreServiceClient
@@ -99,6 +113,7 @@ func NewCgroupProfiler(
 	writeClient profilestorepb.ProfileStoreServiceClient,
 	debugInfoClient debuginfo.Client,
 	target CgroupProfilingTarget,
+	profilingDuration time.Duration,
 	sink func(Record),
 	tmp string,
 ) *CgroupProfiler {
@@ -107,6 +122,7 @@ func NewCgroupProfiler(
 		externalLabels:      externalLabels,
 		ksymCache:           ksymCache,
 		target:              target,
+		profilingDuration:   profilingDuration,
 		sink:                sink,
 		pidMappingFileCache: maps.NewPidMappingFileCache(logger),
 		writeClient:         writeClient,
@@ -224,7 +240,7 @@ func (p *CgroupProfiler) Run(ctx context.Context) error {
 		return fmt.Errorf("get stack traces map: %w", err)
 	}
 
-	ticker := time.NewTicker(profilingDuration)
+	ticker := time.NewTicker(p.profilingDuration)
 	defer ticker.Stop()
 
 	for {
@@ -248,7 +264,7 @@ func (p *CgroupProfiler) profileLoop(ctx context.Context, now time.Time, counts,
 			Unit: "count",
 		}},
 		TimeNanos:     now.UnixNano(),
-		DurationNanos: int64(profilingDuration),
+		DurationNanos: int64(p.profilingDuration),
 
 		// We sample at 100Hz, which is every 10 Million nanoseconds.
 		PeriodType: &profile.ValueType{
