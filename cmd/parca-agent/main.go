@@ -70,6 +70,7 @@ type flags struct {
 	SystemdUnits       []string          `kong:"help='systemd units to profile on this node.'"`
 	TempDir            string            `kong:"help='Temporary directory path to use for object files.',default='/tmp'"`
 	SocketPath         string            `kong:"help='The filesystem path to the container runtimes socket. Leave this empty to use the defaults.'"`
+	ProfilingDuration  string            `kong:"help='The agent profiling duration to use. Leave this empty to use the defaults.'"`
 }
 
 func main() {
@@ -130,6 +131,7 @@ func main() {
 			dc,
 			flags.TempDir,
 			flags.SocketPath,
+			flags.ProfilingDuration,
 		)
 		if err != nil {
 			level.Error(logger).Log("err", err)
@@ -139,7 +141,7 @@ func main() {
 	}
 
 	if len(flags.SystemdUnits) > 0 {
-		sm = agent.NewSystemdManager(
+		sm, err = agent.NewSystemdManager(
 			logger,
 			node,
 			flags.SystemdUnits,
@@ -149,7 +151,12 @@ func main() {
 			wc,
 			dc,
 			flags.TempDir,
+			flags.ProfilingDuration,
 		)
+		if err != nil {
+			level.Error(logger).Log("err", err)
+			os.Exit(1)
+		}
 		targetSources = append(targetSources, sm)
 	}
 

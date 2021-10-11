@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -55,8 +56,9 @@ type PodManager struct {
 	debugInfoClient debuginfo.Client
 	sink            func(Record)
 
-	samplingRatio float64
-	tmpDir        string
+	samplingRatio     float64
+	tmpDir            string
+	profilingDuration time.Duration
 }
 
 func (g *PodManager) SetSink(sink func(Record)) {
@@ -105,6 +107,7 @@ func (g *PodManager) Run(ctx context.Context) error {
 					g.writeClient,
 					g.debugInfoClient,
 					container,
+					g.profilingDuration,
 					g.sink,
 					g.tmpDir,
 				)
@@ -173,9 +176,15 @@ func NewPodManager(
 	debugInfoClient debuginfo.Client,
 	tmp string,
 	socketPath string,
+	profilingDuration string,
 ) (*PodManager, error) {
 	createdChan := make(chan *v1.Pod)
 	deletedChan := make(chan string)
+
+	duration, err := parseProfilingDuration(profilingDuration)
+	if err != nil {
+		return nil, err
+	}
 
 	k8sClient, err := k8s.NewK8sClient(logger, nodeName, socketPath)
 	if err != nil {
@@ -201,6 +210,7 @@ func NewPodManager(
 		writeClient:       writeClient,
 		debugInfoClient:   debugInfoClient,
 		tmpDir:            tmp,
+		profilingDuration: duration,
 	}
 
 	return g, nil
