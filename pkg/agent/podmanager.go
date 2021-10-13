@@ -176,15 +176,10 @@ func NewPodManager(
 	debugInfoClient debuginfo.Client,
 	tmp string,
 	socketPath string,
-	profilingDuration string,
+	profilingDuration time.Duration,
 ) (*PodManager, error) {
 	createdChan := make(chan *v1.Pod)
 	deletedChan := make(chan string)
-
-	duration, err := parseProfilingDuration(profilingDuration)
-	if err != nil {
-		return nil, err
-	}
 
 	k8sClient, err := k8s.NewK8sClient(logger, nodeName, socketPath)
 	if err != nil {
@@ -210,7 +205,7 @@ func NewPodManager(
 		writeClient:       writeClient,
 		debugInfoClient:   debugInfoClient,
 		tmpDir:            tmp,
-		profilingDuration: duration,
+		profilingDuration: profilingDuration,
 	}
 
 	return g, nil

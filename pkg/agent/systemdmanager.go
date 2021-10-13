@@ -78,14 +78,9 @@ func NewSystemdManager(
 	writeClient profilestorepb.ProfileStoreServiceClient,
 	debugInfoClient debuginfo.Client,
 	tmp string,
-	profilingDuration string,
-) (*SystemdManager, error) {
+	profilingDuration time.Duration,
+) *SystemdManager {
 	unitsSet := map[string]struct{}{}
-
-	duration, err := parseProfilingDuration(profilingDuration)
-	if err != nil {
-		return nil, err
-	}
 
 	for _, unit := range units {
 		unitsSet[unit] = struct{}{}
@@ -103,10 +98,10 @@ func NewSystemdManager(
 		units:             unitsSet,
 		unitProfilers:     map[string]*CgroupProfiler{},
 		tmpDir:            tmp,
-		profilingDuration: duration,
+		profilingDuration: profilingDuration,
 	}
 
-	return g, nil
+	return g
 }
 
 func (m *SystemdManager) SetSink(sink func(Record)) {
